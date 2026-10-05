@@ -1,0 +1,98 @@
+name: ci
+
+# Validates unveil without downloading the ~775 MB toolchain.
+# The full pipeline needs Ghidra + a JDK and takes minutes per binary, so it is not
+# run here. These checks catch the failure modes that are cheap to catch and expensive
+# to discover later: a PowerShell syntax error, or a regression that reintroduces one
+# of the Ghidra 12 API traps documented in README.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PowerShell parses cleanly
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            "$PWD/unveil.ps1", [ref]$null, [ref]$errors)
+          if ($errors -and $errors.Count) {
+            $errors | ForEach-Object { Write-Error "L$($_.Extent.StartLineNumber): $($_.Message)" }
+            exit 1
+          }
+          Write-Host "unveil.ps1 parses cleanly"
+
+      - name: Embedded postscript is BOM-less Java and targets Ghidra 12
+        shell: pwsh
+        run: |
+          $raw = Get-Content unveil.ps1 -Raw
+          $fail = @()
+
+          # Single-quoted so $script:PostScriptBody stays literal instead of being
+          # interpolated away to an empty scoped-variable lookup.
+          $body = [regex]::Match($raw, "(?s)\`$script:PostScriptBody = @'\r?\n(.*?)\r?\n'@").Groups[1].Value
+          if (-not $body) { $fail += 'could not extract the embedded postscript' }
+
+          if ($body) {
+            if ($body -notmatch '@category Analysis')      { $fail += 'missing @category Analysis' }
+            if ($body -notmatch 'extends GhidraScript')     { $fail += 'does not extend GhidraScript' }
+            # Ghidra 12 renamed Reference.getFrom() to getFromAddress().
+            if ($body -match '\.getFrom\(\)')               { $fail += 'uses removed API Reference.getFrom()' }
+            if ($body -notmatch 'getFromAddress')           { $fail += 'expected getFromAddress()' }
+            # Flag real Jython/PyGhidra usage, not the word in a comment.
+            $stripped = ($body -split "`n" |
+                         Where-Object { $_ -notmatch '^\s*//' }) -join "`n"
+            if ($stripped -match 'org\.python|import\s+.*jython|PyGhidra\.') {
+              $fail += 'references Jython/PyGhidra APIs, dropped in Ghidra 12'
+            }
+          }
+
+          # The write must be BOM-less: a BOM makes javac fail with illegal character.
+          if ($raw -notmatch 'UTF8Encoding \$false') {
+            $fail += 'postscript is not written BOM-less; PowerShell 5.1 -Encoding UTF8 emits a BOM'
+          }
+
+          # analyzeHeadless forwards args unquoted, so paren-free staging is mandatory.
+          if ($raw -notmatch "paren-free") {
+            $fail += 'no paren-free staging guard found; parenthesised paths break analyzeHeadless.bat'
+          }
+
+          # $args is automatic in PowerShell; shadowing it breaks the script.
+          if ($raw -match '(?m)^\s*\$args\s*=') { $fail += 'shadows the automatic $args variable' }
+
+          if ($fail.Count) { $fail | ForEach-Object { Write-Error $_ }; exit 1 }
+          Write-Host 'embedded postscript checks passed'
+
+      - name: Docs and license are present
+        shell: pwsh
+        run: |
+          $required = @(
+            'README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'CHANGELOG.md', '.gitignore'
+          )
+          $missing = $required | Where-Object { -not (Test-Path $_) }
+          if ($missing) { $missing | ForEach-Object { Write-Error "missing $_" }; exit 1 }
+
+          # Third-party licenses must be recorded, since neither tool is vendored.
+          $notices = Get-Content THIRD-PARTY-NOTICES.md -Raw
+          foreach ($needle in @('Apache', 'Classpath Exception', 'Ghidra', 'Temurin')) {
+            if ($notices -notmatch [regex]::Escape($needle)) {
+              Write-Error "THIRD-PARTY-NOTICES.md does not mention '$needle'"
+            }
+          }
+          Write-Host 'docs present and third-party licenses recorded'
+
+      - name: Nothing from the toolchain is committed
+        shell: pwsh
+        run: |
+          $tracked = git ls-files
+          $bad = $tracked | Where-Object { $_ -match '\.(zip|gpr|rep|lock)$' -or $_ -match '(^|/)(work|tools|downloads)/' }
+          if ($bad) { $bad | ForEach-Object { Write-Error "committed artifact: $_" }; exit 1 }
+          Write-Host 'no toolchain artifacts tracked'

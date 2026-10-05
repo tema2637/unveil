@@ -1,0 +1,30 @@
+# unveil - one-file PE reverse-engineering pipeline
+# MIT licensed. See LICENSE.
+
+# Nothing from the toolchain or its downloads belongs in git.
+# unveil fetches Ghidra and the JDK at runtime; they are hundreds of MB
+# and carry their own licenses (see THIRD-PARTY-NOTICES.md).
+work/
+tools/
+downloads/
+*.zip
+*.verified
+
+# Default output root when run in-place.
+out/
+unveil-out/
+
+# Ghidra writes these next to a project.
+*.gpr
+*.rep/
+*.lock
+*.lock~
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+.DS_Store
