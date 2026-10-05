@@ -8,7 +8,11 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    # Both names, deliberately: this repo's default branch is master, but a
+    # renamed-to-main fork or a fresh clone with a different default would
+    # otherwise skip CI silently. A green-looking push with no run is worse
+    # than no CI at all.
+    branches: [master, main]
   pull_request:
   workflow_dispatch:
 
