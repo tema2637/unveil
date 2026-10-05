@@ -8,15 +8,32 @@ only prerequisites.
 
 ## Just run it
 
-Download the repo (or the zip), put the folder anywhere, and **double-click `run.cmd`**.
+**Hand a friend one file: `unveil-single.cmd`.**
 
-That's the whole thing. No arguments, no configuration. `run.cmd` picks up the binary for
-you, downloads the toolchain on first run, and prints where the output landed.
+That is the entire experience. Double-click, it runs. It unpacks itself into `%TEMP%`,
+analyzes, prints where the output went, and deletes its temporary copy. No zip, no
+folder, no PowerShell script next to it, no arguments.
 
-If your machine blocks unsigned local scripts, `run.cmd` already handles it — see
-*Execution policy* below.
+Build it with `.\build.ps1` (add the bundle to a release, or send it directly).
 
-From a terminal:
+Running from a clone works too, via `run.cmd`.
+
+```powershell
+.\unveil-single.cmd                     # one file, no setup
+.\unveil-single.cmd -Target .\app.exe    # pick a specific binary
+```
+
+### Why a .cmd and not a .exe
+
+An unsigned `.exe` trips SmartScreen on a stranger's machine and gets flagged by
+heuristic AV, so a friend double-clicks, sees a scary dialog, and never finds out
+whether your tool is safe. A `.cmd` does neither. A `.exe` build would also need a
+compiler (`csc` or `dotnet`), which is not something to require of a user.
+
+If you have a code-signing certificate and want the `.exe` anyway, wrap the same
+`unveil.ps1` with your own launcher.
+
+## If you prefer a terminal
 
 ```powershell
 .\run.cmd                              # the double-click path
@@ -43,6 +60,11 @@ If it finds several PE files it analyzes **exactly one** — the first `.dll`/`.
 found, otherwise the smallest file. It then tells you which file it picked and which it
 skipped, because silently picking 13 binaries turns a double-click into an open-ended
 run. To analyze more than one, pass `-Target` more than once.
+
+The size rule is deliberate. A `Downloads` folder typically holds a dozen installers and
+a 300 MB Electron setup is larger than everything else combined, so "analyze the biggest"
+would pick the one file nobody wanted. Smallest-first finishes in about a minute, so the
+first run completes while the user is still reading.
 
 ## Usage
 

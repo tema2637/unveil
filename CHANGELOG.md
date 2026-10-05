@@ -4,6 +4,33 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-06
+
+### Added
+
+- `build.ps1`: produces `unveil-single.cmd`, a self-extracting single file. Double-click
+  and it runs: unpacks the pipeline into `%TEMP%`, analyzes, then deletes its temporary
+  copy. Nothing else to hand over — no zip, no folder, no second file.
+- `unveil-single.cmd`: the built artifact, for releases and direct hand-off.
+
+### Design notes
+
+- A `.cmd` rather than a `.exe`: an unsigned `.exe` trips SmartScreen on a stranger's
+  machine and gets flagged by heuristic AV, so a friend clicks it, sees a scary dialog,
+  and never learns whether the tool is safe. Building an `.exe` would also require a
+  compiler (`csc` or `dotnet`) that a user should not have to install.
+- Extraction and execution are separate steps. Doing both inside one `-Command` block
+  meant re-splitting arguments in PowerShell, and array splatting passes positionally —
+  which silently turned `-Target` into the value of the first parameter instead of its
+  name. `-File "%UNVEIL_TMP%\unveil.ps1" %*` lets PowerShell parse them natively.
+
+### Fixed
+
+- Build-time checks in `build.ps1` reject a bundle whose payload marker appears an
+  unexpected number of times, whose header is not ASCII-only, or whose payload does not
+  survive the round-trip. The marker is a plain alphanumeric token so cmd cannot
+  misread it, and the extractor uses `LastIndexOf` to skip the header copy.
+
 ## [0.2.0] - 2026-10-05
 
 ### Added
@@ -59,5 +86,6 @@ Initial release.
 
 ## [Unreleased]
 
+[0.3.0]: https://github.com/tema2637/unveil/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tema2637/unveil/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tema2637/unveil/releases/tag/v0.1.0
