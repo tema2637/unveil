@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-05
+
+### Added
+
+- `run.cmd`: double-click launcher. Windows commonly blocks unsigned local scripts, so
+  double-clicking `unveil.ps1` usually did nothing visible. The launcher forwards to a child
+  PowerShell with `-ExecutionPolicy Bypass`, scoped to that process only; it does not
+  change machine policy. Set `UNVEIL_NO_PAUSE=1` to skip the final keypress.
+- Target auto-detection, so no arguments are needed. Searches the current directory, the
+  script directory, then `Downloads`, `Desktop`, `Program Files` and `Program Files (x86)`,
+  non-recursively.
+- `Select-ByDefault`: when several PE files are found, exactly one is analyzed — the first
+  `.dll`/`.sys`, otherwise the smallest file. The chosen and skipped files are printed.
+  Analyzing everything would turn a double-click into an open-ended run, and doing so
+  silently is the worst option. More than one target is still available via `-Target`.
+
+### Fixed
+
+- CI triggered on `main` while the default branch is `master`, so the first push produced
+  zero runs: the workflow registered as active and never executed. Both branch names are
+  now listed.
+
 ## [0.1.0] - 2026-10-05
 
 Initial release.
@@ -35,4 +57,7 @@ Initial release.
   architectures are not specifically covered.
 - Analysis time scales with binary size; a 12 MB binary takes several minutes per pass.
 
-[0.1.0]: https://github.com/OWNER/REPO/releases/tag/v0.1.0
+## [Unreleased]
+
+[0.2.0]: https://github.com/tema2637/unveil/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/tema2637/unveil/releases/tag/v0.1.0

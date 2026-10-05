@@ -432,6 +432,37 @@ function Resolve-Toolchain {
     return @{ Headless = $headless; Jdk = $jdk.FullName }
 }
 
+function Select-ByDefault {
+    # Analyze exactly one binary when several are found. Picking all of them turns a
+    # double-click into an open-ended multi-hour run the user never asked for, and
+    # silently is the worst way to do that.
+    #
+    # Preference order, best first:
+    #   1. a DLL / SYS next to it - libraries are the interesting target, and a
+    #      folder of downloads is full of multi-hundred-MB installers;
+    #   2. otherwise the smallest PE file - a sub-10 MB binary analyzes in about a
+    #      minute, so the first run finishes while the user is still reading.
+    param([string[]]$Candidates, [string]$From)
+
+    if ($Candidates.Count -le 1) { return $Candidates }
+
+    $items = @($Candidates | ForEach-Object { Get-Item $_ })
+    $lib   = @($items | Where-Object { $_.Extension -in '.dll', '.sys' } |
+                Sort-Object Length)
+    $pick  = if ($lib.Count -gt 0) { $lib[0] } else { ($items | Sort-Object Length)[0] }
+
+    $rest = @($items | Where-Object { $_.FullName -ne $pick.FullName } |
+              Sort-Object Length | ForEach-Object { $_.Name })
+
+    Write-Ok "found $($items.Count) PE files in $From"
+    Write-Host "        analyzing: $($pick.Name) ($([math]::Round($pick.Length/1MB,1)) MB)" -ForegroundColor DarkGray
+    if ($rest.Count -gt 0) {
+        Write-Host "        skipped  : $($rest.Count -join ', ')" -ForegroundColor DarkGray
+    }
+    Write-Host "        pass -Target <file> to choose differently." -ForegroundColor DarkGray
+    return @($pick.FullName)
+}
+
 function Resolve-Targets {
     if ($Target.Count -gt 0) {
         $resolved = @()
@@ -442,20 +473,32 @@ function Resolve-Targets {
         return $resolved
     }
 
-    # Default: PE binaries sitting in the current directory. Deliberately generic -
-    # no product is hardcoded, so the default cannot look like it targets one app.
-    $here = (Get-Location).Path
-    $pe = @(Get-ChildItem -Path $here -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Extension -in '.exe', '.dll', '.sys' } |
-            Sort-Object Name)
+    # Auto-detect. Order: current dir / script dir, then common install roots,
+    # non-recursively so we never wander the disk. Nothing product-specific is
+    # hardcoded, so the default cannot look like it aims at one application.
+    $dirs = @((Get-Location).Path, $script:ScriptDir) |
+            Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
-    if ($pe.Count -gt 0) {
-        Write-Ok "no -Target given: using $pe.Count PE file(s) from $here"
-        return $pe.FullName
+    foreach ($dir in $dirs) {
+        $pe = @(Get-ChildItem -Path $dir -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Extension -in '.exe', '.dll', '.sys' })
+        if ($pe.Count -gt 0) { return (Select-ByDefault $pe.FullName $dir) }
     }
 
-    Write-Fail "no -Target given and no .exe/.dll/.sys found in $here.`n" +
-               'Pass -Target <file.exe>, or cd into the folder holding the binaries.'
+    $roots = @(
+        (Join-Path $env:USERPROFILE 'Downloads'),
+        (Join-Path $env:USERPROFILE 'Desktop'),
+        $env:ProgramFiles,
+        ${env:ProgramFiles(x86)}
+    ) | Where-Object { $_ -and (Test-Path $_) }
+
+    foreach ($dir in $roots) {
+        $pe = @(Get-ChildItem -Path $dir -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Extension -in '.exe', '.dll', '.sys' })
+        if ($pe.Count -gt 0) { return (Select-ByDefault $pe.FullName $dir) }
+    }
+
+    Write-Fail 'no PE binaries (.exe/.dll/.sys) found in the current directory or common install roots.'
 }
 
 function Get-StagingDir {

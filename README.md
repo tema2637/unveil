@@ -1,32 +1,53 @@
 # unveil
 
 One-file reverse-engineering pipeline for Windows PE binaries. Run it; it fetches its own
-toolchain, analyzes what you point it at, and writes decompiled C.
+toolchain, analyzes the binary, and writes decompiled C.
 
 No install step. No PATH edits. Windows PowerShell 5.1 and ~1.6 GB of free disk are the
 only prerequisites.
 
-```powershell
-.\unveil.ps1
-```
+## Just run it
 
-That is the whole interface. Everything else is optional.
+Download the repo (or the zip), put the folder anywhere, and **double-click `run.cmd`**.
+
+That's the whole thing. No arguments, no configuration. `run.cmd` picks up the binary for
+you, downloads the toolchain on first run, and prints where the output landed.
+
+If your machine blocks unsigned local scripts, `run.cmd` already handles it — see
+*Execution policy* below.
+
+From a terminal:
+
+```powershell
+.\run.cmd                              # the double-click path
+.\unveil.ps1 -Target .\app.exe         # pick a specific binary
+```
 
 ## What it does
 
 1. Downloads and unpacks Ghidra and a JDK, pinning both by **size and sha256**.
-2. Stages each target into a paren-free directory (see *Why those workarounds* below).
+2. Stages the target into a paren-free directory (see *Why those workarounds* below).
 3. Imports it into a persistent Ghidra project and runs the analysis.
 4. Exports decompiled C, a full function inventory, the anchor strings, and a summary.
-5. Repeats for each target.
 
-Re-running is cheap: existing projects are reused and only the export re-runs, via
+Re-running is cheap: the project is reused and only the export re-runs, via
 `-process -noanalysis`. Nothing is re-downloaded.
+
+## How it picks a target
+
+You don't have to say. With no `-Target`, it looks, in order, at the current directory,
+the script's own directory, then `Downloads`, `Desktop`, `Program Files`,
+`Program Files (x86)`.
+
+If it finds several PE files it analyzes **exactly one** — the first `.dll`/`.sys` it
+found, otherwise the smallest file. It then tells you which file it picked and which it
+skipped, because silently picking 13 binaries turns a double-click into an open-ended
+run. To analyze more than one, pass `-Target` more than once.
 
 ## Usage
 
 ```powershell
-.\unveil.ps1                                  # default target set, reusing cache
+.\unveil.ps1                                  # auto-detect
 .\unveil.ps1 -Target .\app.exe -Target .\lib.dll
 .\unveil.ps1 -SkipDownload                    # toolchain already present
 .\unveil.ps1 -Force                           # re-import from scratch
@@ -42,6 +63,25 @@ Output per target:
 | `functions.txt` | full function inventory (name, size, thunk, entry) |
 | `anchor_strings.txt` | strings that anchored the selection |
 | `summary.txt` | counters: functions, anchored, decompiled |
+
+## Execution policy
+
+Windows often blocks unsigned local scripts, which is why `run.cmd` exists: double-clicking
+`unveil.ps1` directly usually does nothing visible.
+
+`run.cmd` launches the child PowerShell with `-ExecutionPolicy Bypass`, which applies to
+**that one process only** and changes nothing on the machine. It deliberately does not
+touch the machine's policy, because quietly disabling a security setting is not something a
+tool should do to someone else's computer.
+
+If you would rather not bypass anything, run the script yourself:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\unveil.ps1
+```
+
+Set `UNVEIL_NO_PAUSE=1` to stop `run.cmd` from waiting for a keypress at the end.
 
 ## Why it selects functions by string, not by name
 
