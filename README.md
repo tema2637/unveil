@@ -8,15 +8,21 @@ only prerequisites.
 
 ## Just run it
 
-**Hand a friend one file: `unveil-single.cmd`.**
+**Hand a friend `unveil-single.cmd`.** One file, about 178 MB.
 
-That is the entire experience. Double-click, it runs. It unpacks itself into `%TEMP%`,
-analyzes, prints where the output went, and deletes its temporary copy. No zip, no
-folder, no PowerShell script next to it, no arguments.
+Double-click and it runs: unpacks a stripped Ghidra plus a minimal JVM into
+`%LOCALAPPDATA%`, analyzes the binary it finds, writes the result, and cleans up its
+temporary copy. No download, no install, no compiler, no network, no arguments.
 
-Build it with `.\build.ps1` (add the bundle to a release, or send it directly).
+The file is big on purpose. The engine has to exist somewhere, and shipping it inside
+is the only option where the person you hand it to does nothing at all. Everything the
+user wrote is 27 KB; the rest is the decompiler.
 
-Running from a clone works too, via `run.cmd`.
+Build it with `.\build.ps1 -PackInstalled` — run `.\unveil.ps1` once first so the engine
+is on disk, then packing re-uses it and downloads nothing.
+
+Running from a clone works too, via `run.cmd`, and downloads the engine on first run
+instead.
 
 ```powershell
 .\unveil-single.cmd                     # one file, no setup
@@ -30,8 +36,29 @@ heuristic AV, so a friend double-clicks, sees a scary dialog, and never finds ou
 whether your tool is safe. A `.cmd` does neither. A `.exe` build would also need a
 compiler (`csc` or `dotnet`), which is not something to require of a user.
 
+The binary tail after `exit /b` is never parsed by `cmd`; confirmed empirically with a
+178 MB payload. `tar` on a stock Windows 10/11 reads the embedded `tar.zst`, so the user
+needs no third-party extractor.
+
 If you have a code-signing certificate and want the `.exe` anyway, wrap the same
 `unveil.ps1` with your own launcher.
+
+## Where the 178 MB went
+
+| | before | after |
+|---|---|---|
+| my code | 27 KB | 27 KB |
+| JDK | 328 MB | **50 MB** (built with `jlink`) |
+| Ghidra | 864 MB | **315 MB** (stripped) |
+| compressed for shipping | 739 MB download | **178 MB in one file** |
+
+Removed from Ghidra: `docs` (104 MB of documentation), `Extensions` (100 MB of IDE
+plugins), `Debug` (79 MB, every debugger backend), and the `FunctionID`, `BSim`,
+`GhidraServer` and `PyGhidra` features. None are used by headless analysis and export.
+Verified with a full run on the stripped tree.
+
+`tar -tf` on the embedded archive, and a clean-`WorkDir` end-to-end run, are both part of
+how this was checked.
 
 ## If you prefer a terminal
 

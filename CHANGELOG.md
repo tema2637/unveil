@@ -4,6 +4,43 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-06
+
+### Changed
+
+- The engine is now shipped **inside** `unveil-single.cmd`. Double-click, and it runs:
+  no download, no install, no compiler, no network. The bundle is ~178 MB and unpacks a
+  stripped Ghidra plus a minimal JVM into `%LOCALAPPDATA%` on first run.
+- `Install-Toolchain` now skips the download when the toolchain is actually present in
+  `WorkDir\tools`, rather than trusting the `-SkipDownload` flag. Previously a bundle run
+  with a custom `-WorkDir` skipped the download and then failed with "Ghidra not found".
+- The bundle header reads `-WorkDir` from the caller's arguments before unpacking the
+  engine, so engine and analysis agree on the directory. It also stopped forcing
+  `-SkipDownload`, which broke custom-WorkDir runs.
+
+### Toolchain slimming
+
+- `jlink` builds a minimal runtime instead of shipping a full JDK: 328 MB -> **50.3 MB**.
+- Dropped from Ghidra: `docs` (104 MB of documentation), `Extensions` (100 MB),
+  `Features\FunctionID` (195 MB), `BSim`, `GhidraServer`, `PyGhidra`, and `Debug` (79 MB,
+  every debugger backend). None are needed for headless analysis and export. Verified:
+  full end-to-end run on the stripped tree, RC=0, 38 functions decompiled.
+
+### Fixed
+
+- The bundle wrote its PowerShell payload with `Encoding.ASCII`, which silently rewrote the
+  em-dash in the synopsis to `?`. It now writes UTF-8.
+- Marker lookup used `IndexOf`, but the header's own extractor names both tokens literally,
+  so it matched inside the header and sliced the bundle at the wrong offset. Now
+  `LastIndexOf`, with a check that each token occurs exactly twice.
+- No stray CRLF after a separator: two extra bytes were landing inside the archived payload.
+
+### Known
+
+- The stripped toolchain reports 1613 functions where the full one reports 1614. Most likely
+  `FunctionID`, which was removed, since that module computes function hashes. Not confirmed
+  causally; reported as a measurement.
+
 ## [0.3.0] - 2026-10-06
 
 ### Added
@@ -86,6 +123,7 @@ Initial release.
 
 ## [Unreleased]
 
+[0.4.0]: https://github.com/tema2637/unveil/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tema2637/unveil/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tema2637/unveil/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tema2637/unveil/releases/tag/v0.1.0

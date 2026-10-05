@@ -370,9 +370,22 @@ function Get-Archive {
 }
 
 function Install-Toolchain {
-    if ($SkipDownload) {
-        Write-Warn2 'SkipDownload: using the existing toolchain'
+    # "Already installed" is the real condition, not the -SkipDownload flag. The
+    # single-file bundle ships the engine and forwards -SkipDownload, but the user may
+    # also pass a custom -WorkDir; then the engine lives in that directory and the flag
+    # alone would make the script skip the download and fail with "Ghidra not found".
+    # Checking the target directory makes both cases work with no extra wiring.
+    $tools = Join-Path $WorkDir 'tools'
+    $haveGhidra = Get-ChildItem $tools -Directory -Filter 'ghidra_*_PUBLIC' -ErrorAction SilentlyContinue
+    $haveJdk    = Get-ChildItem $tools -Directory -Filter 'jdk-*' -ErrorAction SilentlyContinue
+    if ($haveGhidra -and $haveJdk) {
+        if ($SkipDownload) { Write-Warn2 'SkipDownload: using the existing toolchain' }
+        else { Write-Ok 'toolchain already present, nothing to download' }
         return
+    }
+    if ($SkipDownload) {
+        Write-Fail "-SkipDownload was given but the toolchain is missing under $tools`n" +
+                   'Run once without -SkipDownload, or extract a bundled engine there.'
     }
     $dl = Join-Path $WorkDir 'downloads'
     New-Item -ItemType Directory -Force -Path $dl | Out-Null

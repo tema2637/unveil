@@ -20,6 +20,13 @@ unveil-out/
 *.lock
 *.lock~
 
+# Built artifact. unveil-single.cmd embeds the whole engine (Ghidra + a jlink runtime)
+# and is ~178 MB, so it cannot be committed: GitHub rejects any file over 100 MB.
+# Build it with .\build.ps1, or download it from the GitHub Release.
+unveil-single.cmd
+*.tar.zst
+*.tar.xz
+
 # Editor / OS noise
 .vscode/
 .idea/
